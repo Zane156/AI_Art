@@ -1,0 +1,37 @@
+# Python dependencies for PixArt-FTXUI backend
+# Install: pip install -r requirements.txt
+
+# PyTorch (choose your CUDA version)
+--extra-index-url https://download.pytorch.org/whl/cu124
+torch>=2.2.0
+torchvision
+
+# Diffusers
+diffusers>=0.30.0
+
+# Transformers
+transformers>=4.40.0
+sentencepiece
+protobuf
+
+# Image processing
+pillow>=9.0.0
+accelerate>=0.20.0
+
+# LoRA training
+peft>=0.10.0
+
+# Utilities
+requests
+tqdm
+
+# HuggingFace Hub (for model download)
+huggingface_hub>=0.20.0
+
+# WD14 Tagger dependencies (for advanced auto-labeling)
+# Uncomment if you want WD14-based tagging:
+# timm
+# onnxruntime
+
+# DeepSeek / OpenAI API client (for agent)
+openai>=1.0.0

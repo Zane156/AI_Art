@@ -1,0 +1,36 @@
+# Build output
+build/
+*.exe
+*.ilk
+*.pdb
+*.obj
+
+# Model files (large)
+models/*
+!models/.gitkeep
+
+# Output images
+outputs/*
+!outputs/.gitkeep
+
+# API keys (security)
+api.txt
+
+# Python
+__pycache__/
+*.pyc
+
+# VS
+.vs/
+*.user
+*.suo
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+_deps/
+
+# Internal dev notes
+ANALYSIS_REPORT.md
+IMPROVEMENTS_SUMMARY.md

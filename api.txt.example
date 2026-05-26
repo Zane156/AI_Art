@@ -1,0 +1,5 @@
+# 在这里填写你的 DeepSeek API Key
+# 到 https://platform.deepseek.com 注册获取
+# 然后把下面这行的 sk-your-key-here 替换成你的真实 Key
+
+sk-your-key-here
