@@ -19,9 +19,6 @@
 
 using namespace ftxui;
 
-// ====================================================================
-// Ctrl+V clipboard paste
-// ====================================================================
 static bool PasteFromClipboard(std::string& target) {
     if (!OpenClipboard(nullptr)) return false;
     HANDLE h = GetClipboardData(CF_UNICODETEXT);
@@ -40,9 +37,6 @@ static bool PasteFromClipboard(std::string& target) {
     return true;
 }
 
-// ====================================================================
-// State
-// ====================================================================
 struct AState {
     std::deque<ChatEntry> chat_history;
     std::string chat_input_text;
@@ -54,23 +48,19 @@ struct AState {
     bool testing_api = false;
     std::string test_result;
 
-    // Scroll state: offset from bottom (0 = show newest)
     int scroll_offset = 0;
-    static constexpr int MAX_VISIBLE = 12;
-    bool user_scrolled = false;  // true if user manually scrolled up
-    int last_size = 0;           // track for auto-scroll on new messages
+    static constexpr int MAX_VISIBLE = 10;
+    bool user_scrolled = false;
+    int last_size = 0;
 };
 
-// ====================================================================
-// Test DeepSeek API key
-// ====================================================================
 static void TestAPIKey(
     std::shared_ptr<BackendIPC> backend,
     std::shared_ptr<AState> st,
     std::function<void()> on_ui_refresh)
 {
     st->testing_api = true;
-    st->test_result = "  测试中...";
+    st->test_result = "测试中...";
     on_ui_refresh();
 
     std::thread([st, backend, on_ui_refresh] {
@@ -78,8 +68,8 @@ static void TestAPIKey(
         while (!key.empty() && (key.back() == ' ' || key.back() == '\n' || key.back() == '\r')) key.pop_back();
         while (!key.empty() && (key.front() == ' ' || key.front() == '\t')) key.erase(0, 1);
 
-        if (key.size() < 15 || key.find("sk-") != 0) {
-            st->test_result = "  x 密钥格式错误 (需要 sk- 开头)";
+        if (key.size() < 15 || key.rfind("sk-", 0) != 0) {
+            st->test_result = "密钥格式错误 (需 sk- 开头)";
             st->testing_api = false;
             on_ui_refresh();
             return;
@@ -87,7 +77,7 @@ static void TestAPIKey(
 
         std::ostringstream body;
         body << "{";
-        JsonPair(body, "message", "test");
+        JsonPair(body, "message", "ping");
         body << ",";
         JsonPair(body, "api_key", key);
         body << ",";
@@ -99,17 +89,22 @@ static void TestAPIKey(
         body << "}";
 
         std::string resp = backend->ChatWithAgent(body.str());
-        std::string succ = JsonGet(resp, "success");
 
-        if (succ == "true" || succ == "True") {
-            st->test_result = "  v DeepSeek API 验证通过";
-            st->api_tested = true;
-            backend->SetApiKey(key);
-        } else {
-            std::string err = JsonGet(resp, "reply");
-            if (err.empty()) err = JsonGet(resp, "error");
-            st->test_result = "  x " + (err.empty() ? "验证失败" : err);
+        if (resp.empty()) {
+            st->test_result = "后端无响应 - 请检查后端是否启动";
             st->api_tested = false;
+        } else {
+            std::string succ = JsonGet(resp, "success");
+            if (succ == "true" || succ == "True") {
+                st->test_result = "DeepSeek API 验证通过";
+                st->api_tested = true;
+                backend->SetApiKey(key);
+            } else {
+                std::string reply = JsonGet(resp, "reply");
+                std::string err = JsonGet(resp, "error");
+                st->test_result = reply.empty() ? (err.empty() ? "验证失败" : err) : reply;
+                st->api_tested = false;
+            }
         }
 
         st->testing_api = false;
@@ -117,9 +112,6 @@ static void TestAPIKey(
     }).detach();
 }
 
-// ====================================================================
-// Send agent message via backend
-// ====================================================================
 static void SendAgentMessage(
     std::shared_ptr<BackendIPC> backend,
     std::shared_ptr<AState> st,
@@ -163,9 +155,6 @@ static void SendAgentMessage(
     on_ui_refresh();
 }
 
-// ====================================================================
-// CreateAgentPanel
-// ====================================================================
 Component CreateAgentPanel(
     std::shared_ptr<BackendIPC> backend,
     std::function<std::string()> get_current_screen,
@@ -174,17 +163,15 @@ Component CreateAgentPanel(
 {
     auto st = std::make_shared<AState>();
 
-    // Load saved key
     st->api_key_text = backend->GetApiKey();
 
-    // Welcome message
     {
         std::lock_guard<std::mutex> lk(st->chat_mutex);
         st->chat_history.push_back({ChatEntry::SystemMsg,
             "欢迎使用 AI Art Agent\n"
             "1. 输入 DeepSeek API Key (sk-...)\n"
-            "2. 点击 [ 测试API ] 验证密钥\n"
-            "3. 验证通过后即可开始对话", ""});
+            "2. 点击 [测试API] 验证密钥\n"
+            "3. 验证通过后即可对话", ""});
     }
 
     // ---- Components ----
@@ -200,24 +187,30 @@ Component CreateAgentPanel(
         return false;
     });
 
-    auto test_btn = Button(" 测试API ", [st, backend, on_ui_refresh] {
+    auto test_btn = Button("测试API", [st, backend, on_ui_refresh] {
         if (st->testing_api) return;
         TestAPIKey(backend, st, on_ui_refresh);
     });
 
-    auto save_key_btn = Button(" 保存密钥 ", [st, backend] {
-        backend->SetApiKey(st->api_key_text);
-    });
-
-    auto clear_btn = Button(" 清空聊天 ", [st, on_ui_refresh] {
-        std::lock_guard<std::mutex> lk(st->chat_mutex);
-        st->chat_history.clear();
-        st->chat_history.push_back({ChatEntry::SystemMsg,
-            "已清空。请先确保 API Key 已验证。", ""});
+    auto clear_key_btn = Button("清空密钥", [st, on_ui_refresh, backend] {
+        st->api_key_text.clear();
+        st->api_tested = false;
+        st->test_result.clear();
+        backend->SetApiKey("");
         on_ui_refresh();
     });
 
-    auto send_btn = Button(" 发送 ", [st, backend, get_current_screen, get_status_text, on_ui_refresh] {
+    auto clear_chat_btn = Button("清空聊天", [st, on_ui_refresh] {
+        std::lock_guard<std::mutex> lk(st->chat_mutex);
+        st->chat_history.clear();
+        st->chat_history.push_back({ChatEntry::SystemMsg,
+            "已清空。请先验证 API Key。", ""});
+        st->scroll_offset = 0;
+        st->user_scrolled = false;
+        on_ui_refresh();
+    });
+
+    auto send_btn = Button("发送", [st, backend, get_current_screen, get_status_text, on_ui_refresh] {
         if (st->chat_input_text.empty()) return;
         if (st->waiting_reply) return;
         if (!st->api_tested) {
@@ -243,7 +236,7 @@ Component CreateAgentPanel(
         }).detach();
     });
 
-    auto btn_scroll_up = Button(" ^ ", [st, on_ui_refresh] {
+    auto btn_scroll_up = Button("^", [st, on_ui_refresh] {
         int total = (int)st->chat_history.size();
         int max_offset = std::max(0, total - AState::MAX_VISIBLE);
         st->scroll_offset = std::min(st->scroll_offset + 5, max_offset);
@@ -251,135 +244,130 @@ Component CreateAgentPanel(
         on_ui_refresh();
     });
 
-    auto btn_scroll_dn = Button(" v ", [st, on_ui_refresh] {
+    auto btn_scroll_dn = Button("v", [st, on_ui_refresh] {
         st->scroll_offset = std::max(st->scroll_offset - 5, 0);
         if (st->scroll_offset == 0) st->user_scrolled = false;
         on_ui_refresh();
     });
 
-    // Container includes ALL interactive components
+    // Container: ALL interactive components must be here for events to work
     auto container = Container::Vertical({
-        Container::Horizontal({ test_btn, save_key_btn, clear_btn, btn_scroll_up, btn_scroll_dn }),
+        Container::Horizontal({ test_btn, clear_key_btn, clear_chat_btn }),
         api_input,
         chat_input,
-        send_btn,
+        Container::Horizontal({ send_btn, btn_scroll_up, btn_scroll_dn }),
     });
 
     return Renderer(container, [st,
         chat_input, send_btn, api_input,
-        test_btn, save_key_btn, clear_btn,
+        test_btn, clear_key_btn, clear_chat_btn,
         btn_scroll_up, btn_scroll_dn
     ] {
-        Elements header, chat, footer;
+        Elements all;
 
-        // ===== HEADER =====
-        header.push_back(hbox({
-            text(" Agent") | bold | color(Color::Cyan),
+        // ===== TITLE BAR =====
+        all.push_back(hbox({
+            text(" Agent ") | bold | color(Color::Cyan),
             text(" ") | flex,
-            clear_btn->Render(),
+            clear_chat_btn->Render() | size(WIDTH, EQUAL, 10),
         }));
-        header.push_back(separator());
+        all.push_back(separator());
 
-        // API key input row
-        header.push_back(hbox({
-            text(" Key: ") | dim,
+        // ===== API KEY ROW =====
+        all.push_back(hbox({
+            text(" 密钥: ") | dim,
             api_input->Render() | flex,
+            separator(),
             test_btn->Render(),
-        }));
-        header.push_back(hbox({
-            save_key_btn->Render(),
+            separator(),
+            clear_key_btn->Render(),
         }));
 
         // Test result
         if (!st->test_result.empty()) {
+            all.push_back(separator());
             auto c = st->api_tested ? Color::Green : (st->testing_api ? Color::Yellow : Color::Red);
-            header.push_back(hbox({
+            all.push_back(hbox({
+                text("  ") | color(c) | bold,
                 text(st->test_result) | color(c),
-                text(" ") | flex,
-                clear_btn->Render(),
             }));
         }
 
-        // ===== CHAT (offset-based scrolling, newest-first) =====
+        all.push_back(separator());
+
+        // ===== CHAT AREA =====
         {
             std::lock_guard<std::mutex> lk(st->chat_mutex);
             int total = (int)st->chat_history.size();
 
-            // Auto-scroll to bottom on new messages (unless user scrolled up)
             if (total > st->last_size && !st->user_scrolled) {
                 st->scroll_offset = 0;
             }
             st->last_size = total;
 
-            // Clamp offset
             int max_offset = std::max(0, total - AState::MAX_VISIBLE);
             if (st->scroll_offset > max_offset) st->scroll_offset = max_offset;
             if (st->scroll_offset < 0) st->scroll_offset = 0;
 
             int first_visible = max_offset - st->scroll_offset;
-            int last_visible = std::min(first_visible + AState::MAX_VISIBLE, total);
+            int last_visible  = std::min(first_visible + AState::MAX_VISIBLE, total);
 
             if (total == 0) {
-                chat.push_back(text(" 暂无消息") | dim | center);
+                all.push_back(text(" 暂无消息") | dim | center);
             } else {
-                // Scroll indicator bar
-                if (st->scroll_offset > 0 || total > AState::MAX_VISIBLE) {
-                    std::string indicator = "  [消息 " + std::to_string(first_visible + 1)
-                        + "-" + std::to_string(last_visible) + " / " + std::to_string(total) + "]";
-                    if (st->scroll_offset > 0) {
-                        indicator += "  ^ 往上翻";
-                    }
-                    if (first_visible + AState::MAX_VISIBLE < total) {
-                        indicator += "  v 往下翻";
-                    }
-                    chat.push_back(hbox({
-                        text(indicator) | dim | color(Color::Grey50),
-                        text(" ") | flex,
+                // Scroll bar
+                if (total > AState::MAX_VISIBLE) {
+                    all.push_back(hbox({
+                        text(" [" + std::to_string(first_visible + 1) + "-"
+                             + std::to_string(last_visible) + "/" + std::to_string(total) + "]") | dim,
+                        separator(),
                         btn_scroll_up->Render(),
                         btn_scroll_dn->Render(),
                     }));
-                    chat.push_back(separator());
+                    all.push_back(separator());
                 }
 
-                // Render only visible messages (newest-first within window)
+                // Render visible messages
                 for (int i = last_visible - 1; i >= first_visible; i--) {
                     auto& e = st->chat_history[i];
                     switch (e.type) {
                     case ChatEntry::UserMsg:
-                        chat.push_back(separator());
-                        chat.push_back(hbox({
-                            text("  你") | bold | color(Color::YellowLight),
+                        all.push_back(hbox({
+                            text(" 你 ") | bold | color(Color::YellowLight),
                         }));
-                        chat.push_back(paragraph(e.text));
+                        all.push_back(paragraph(e.text));
+                        all.push_back(separator());
                         break;
                     case ChatEntry::AgentReply:
-                        chat.push_back(separator());
-                        chat.push_back(hbox({
-                            text("  AI") | bold | color(Color::CyanLight),
+                        all.push_back(hbox({
+                            text(" AI ") | bold | color(Color::CyanLight),
                         }));
-                        chat.push_back(paragraph(e.text));
+                        all.push_back(paragraph(e.text));
+                        all.push_back(separator());
                         break;
                     case ChatEntry::ToolCall:
-                        chat.push_back(hbox({
-                            text("  >> ") | bold | color(Color::Cyan),
+                        all.push_back(hbox({
+                            text(" >> ") | bold | color(Color::Cyan),
                             text(e.detail) | bold,
                         }));
                         if (!e.text.empty())
-                            chat.push_back(paragraph(e.text) | dim);
+                            all.push_back(paragraph(e.text) | dim);
+                        all.push_back(separator());
                         break;
                     case ChatEntry::ToolResult:
-                        chat.push_back(hbox({
-                            text("  OK ") | color(Color::Green),
+                        all.push_back(hbox({
+                            text(" OK ") | color(Color::Green),
                             text(e.text) | dim,
                         }));
+                        all.push_back(separator());
                         break;
                     case ChatEntry::ErrorMsg:
-                        chat.push_back(separator());
-                        chat.push_back(paragraph(e.text) | color(Color::Red));
+                        all.push_back(paragraph(e.text) | color(Color::Red));
+                        all.push_back(separator());
                         break;
                     case ChatEntry::SystemMsg:
-                        chat.push_back(separator());
-                        chat.push_back(paragraph(e.text) | dim | color(Color::Grey50));
+                        all.push_back(paragraph(e.text) | dim | color(Color::Grey50));
+                        all.push_back(separator());
                         break;
                     }
                 }
@@ -387,25 +375,19 @@ Component CreateAgentPanel(
         }
 
         // ===== FOOTER =====
+        all.push_back(separator());
         if (st->waiting_reply) {
-            footer.push_back(separator());
-            footer.push_back(hbox({
-                text("  AI 思考中") | dim | color(Color::Yellow),
-                text("...") | blink,
+            all.push_back(hbox({
+                text(" AI 思考中...") | dim | color(Color::Yellow) | blink,
             }));
+            all.push_back(separator());
         }
-        footer.push_back(separator());
-        footer.push_back(hbox({
+        all.push_back(hbox({
             chat_input->Render() | flex,
-            send_btn->Render(),
+            separator(),
+            send_btn->Render() | size(WIDTH, EQUAL, 6),
         }));
 
-        return vbox({
-            vbox(std::move(header)),
-            separator(),
-            vbox(std::move(chat)) | flex,
-            separator(),
-            vbox(std::move(footer)),
-        }) | flex | borderEmpty;
+        return vbox(all) | flex | borderEmpty;
     });
 }

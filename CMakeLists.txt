@@ -34,8 +34,8 @@ FetchContent_Declare(ftxui
 FetchContent_MakeAvailable(ftxui)
 
 set(SOURCES
-    cpp/src/main.cpp cpp/src/generate_screen.cpp cpp/src/train_screen.cpp
-    cpp/src/agent_panel.cpp cpp/src/backend_ipc.cpp
+    cpp/src/main.cpp cpp/src/generate_screen.cpp cpp/src/gallery_screen.cpp
+    cpp/src/train_screen.cpp cpp/src/agent_panel.cpp cpp/src/backend_ipc.cpp
 )
 add_executable(aitermui ${SOURCES})
 target_include_directories(aitermui PRIVATE cpp/include ${ftxui_SOURCE_DIR}/include)

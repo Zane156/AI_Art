@@ -1458,14 +1458,33 @@ class RequestHandler(BaseHTTPRequestHandler):
         screen = data.get("screen", "unknown")
         status = data.get("status", "unknown")
 
+        # Log received key to file for debugging
+        try:
+            with open(os.path.join(PROJECT_ROOT, "agent_debug.log"), "a", encoding="utf-8") as f:
+                from datetime import datetime
+                ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                f.write(f"[{ts}] len={len(api_key)} FULL_HEX={api_key.encode('utf-8').hex()}\n")
+        except:
+            pass
+
         if not api_key or len(api_key) < 15:
             self._send_json({"success": False, "reply": f"API密钥无效 (长度 {len(api_key)})，请检查: 确保已粘贴完整密钥（以 sk- 开头）"})
+            return
+        if not api_key.startswith("sk-"):
+            self._send_json({"success": False, "reply": f"API密钥格式错误 (不以sk-开头): {api_key[:20]}..."})
             return
         if not message.strip():
             self._send_json({"success": False, "reply": "请输入问题。"})
             return
 
-        result, tool_calls = run_agent_loop(api_key, provider, message, screen, status)
+        try:
+            result, tool_calls = run_agent_loop(api_key, provider, message, screen, status)
+        except Exception as e:
+            import traceback
+            print(f"[Agent] UNCAUGHT exception: {e}", flush=True)
+            traceback.print_exc()
+            self._send_json({"success": False, "reply": f"后端异常: {str(e)}"})
+            return
 
         self._send_json({
             "success": result.get("success", False),

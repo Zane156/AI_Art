@@ -34,3 +34,5 @@ _deps/
 # Internal dev notes
 ANALYSIS_REPORT.md
 IMPROVEMENTS_SUMMARY.md
+# Debug logs
+*.log

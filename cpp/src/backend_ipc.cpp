@@ -57,9 +57,8 @@ void BackendIPC::LoadApiKey() {
     // 3. User profile
     char userprofile[MAX_PATH] = {};
     GetEnvironmentVariableA("USERPROFILE", userprofile, MAX_PATH);
-    
     const char* paths[] = {
-        proj_key.c_str(),     // Project root: PixArt-FTXUI/api.txt
+        proj_key.c_str(),     // Project root
         app_key.c_str(),      // AppData: %APPDATA%/AITermUI/api.txt
         "api.txt",            // Current directory
         nullptr
