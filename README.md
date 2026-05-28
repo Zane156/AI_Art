@@ -40,7 +40,38 @@ AI_Art_Submit/
 ├── requirements.txt          # Python 依赖列表
 ├── 启动.bat                  # 一键启动脚本
 ├── api.txt.example           # API Key 配置模板
+├── models/                   # 模型文件夹（从百度网盘下载放入）
+│   ├── PixArt-Sigma/
+│   └── SD3-Medium/
 └── README.md                 # 本文件
+```
+
+## 模型下载
+
+程序需要模型文件才能运行。模型通过百度网盘提供：
+
+> **百度网盘链接**：https://pan.baidu.com/s/1BfypSFGzLcFe4ngWeGR8qA?pwd=3tb8  
+> **提取码**：3tb8
+
+| 模型 | 大小 | 状态 |
+|------|------|------|
+| PixArt-Sigma | ~7 GB | ✅ 可用 |
+| SD3-Medium | ~10 GB | ✅ 可用 |
+| SD3.5-Large | ~16 GB | ⚠️ 模型文件有问题，暂不可用 |
+
+**使用方法**：
+
+1. 下载所需模型文件夹
+2. 将模型文件夹放入项目根目录的 `models/` 目录下
+3. 双击 `启动.bat`，程序会自动检测并识别模型
+
+文件夹结构应如下：
+
+```
+models/
+├── PixArt-Sigma/     # 下载后放入
+├── SD3-Medium/       # 下载后放入
+└── SD3.5-Large/      # 暂不可用
 ```
 
 ## 启动方法
